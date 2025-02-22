@@ -2,72 +2,78 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-def test_footer_text():
-    driver = webdriver.Chrome()
-
-    try:
-        driver.get("https://demoqa.com/")
-
-        wait = WebDriverWait(driver, 10)
-
-        footer_locator = (By.XPATH, "//footer//span")
-        footer_element = wait.until(EC.visibility_of_element_located(footer_locator))
-
-        footer_text = footer_element.text
-
-        expected_text = "© 2013-2020 TOOLSQA.COM | ALL RIGHTS RESERVED."
-
-        assert footer_text == expected_text, f"Текст в подвале не совпадает. Ожидалось: {expected_text}, получено: {footer_text}"
-
-        print("Тест пройден успешно! Текст в подвале совпадает.")
-
-    except Exception as e:
-        print(f"Тест завершился с ошибкой: {e}")
-
-    finally:
-        # Закрытие браузера
-        driver.quit()
-
-
-        
-
-from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-import time
+import pytest
 
-chrome_options = Options()
-chrome_options.add_argument("--start-maximized")
-service = Service('path/to/chromedriver')
-driver = webdriver.Chrome(service=service, options=chrome_options)
-try:
-    driver.get("https://demoqa.com/")
-    print("Перешли на страницу https://demoqa.com/")
 
-    try:
-        elements_button = driver.find_element(By.XPATH, "//h5[text()='Elements']")
-        elements_button.click()
-        print("Перешли на страницу https://demoqa.com/elements")
-    except NoSuchElementException:
-        print("Кнопка 'Elements' не найдена на странице.")
-        raise
-    try:
-        center_text = driver.find_element(By.CLASS_NAME, "mb-3").text
-        expected_text = "Please select an item from left to start practice."
+class BasePage:
+    def __init__(self, driver):
+        self.driver = driver
+        self.wait = WebDriverWait(self.driver, 10)
 
-        if center_text == expected_text:
-            print("Текст по центру страницы совпадает с ожидаемым.")
-        else:
-            print(f"Текст по центру страницы не совпадает. Ожидалось: '{expected_text}', получено: '{center_text}'")
-    except NoSuchElementException:
-        print("Элемент с текстом не найден на странице.")
+    def open(self, url):
+        self.driver.get(url)
 
-    time.sleep(3)
-except Exception as e:
-    print(f"Произошла ошибка: {e}")
-finally:
+    def find_element(self, locator):
+        return self.wait.until(EC.visibility_of_element_located(locator))
+
+    def click_element(self, locator):
+        element = self.find_element(locator)
+        element.click()
+
+    def get_text(self, locator):
+        element = self.find_element(locator)
+        return element.text
+
+
+class MainPage(BasePage):
+    FOOTER_LOCATOR = (By.XPATH, "//footer//span")
+    ELEMENTS_BUTTON = (By.XPATH, "//h5[text()='Elements']")
+
+    def get_footer_text(self):
+        return self.get_text(self.FOOTER_LOCATOR)
+
+    def go_to_elements_page(self):
+        self.click_element(self.ELEMENTS_BUTTON)
+
+
+class ElementsPage(BasePage):
+    CENTER_TEXT_LOCATOR = (By.CLASS_NAME, "mb-3")
+
+    def get_center_text(self):
+        return self.get_text(self.CENTER_TEXT_LOCATOR)
+
+
+@pytest.fixture
+def driver():
+    chrome_options = Options()
+    chrome_options.add_argument("--start-maximized")
+    service = Service('path/to/chromedriver')  # Укажите правильный путь к драйверу
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    yield driver
     driver.quit()
-    print("Браузер закрыт.")
+
+
+def test_footer_text(driver):
+    main_page = MainPage(driver)
+    main_page.open("https://demoqa.com/")
+
+    footer_text = main_page.get_footer_text()
+    expected_text = "© 2013-2020 TOOLSQA.COM | ALL RIGHTS RESERVED."
+
+    assert footer_text == expected_text, f"Текст в подвале не совпадает. Ожидалось: {expected_text}, получено: {footer_text}"
+    print("Тест пройден успешно! Текст в подвале совпадает.")
+
+
+def test_elements_page(driver):
+    main_page = MainPage(driver)
+    main_page.open("https://demoqa.com/")
+    main_page.go_to_elements_page()
+
+    elements_page = ElementsPage(driver)
+    center_text = elements_page.get_center_text()
+    expected_text = "Please select an item from left to start practice."
+
+    assert center_text == expected_text, f"Текст по центру страницы не совпадает. Ожидалось: '{expected_text}', получено: '{center_text}'"
+    print("Текст по центру страницы совпадает с ожидаемым.")
